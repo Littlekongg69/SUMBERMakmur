@@ -15,8 +15,9 @@ class EditProfileScreen extends ConsumerStatefulWidget {
 }
 
 class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
-  late TextEditingController _nameCtrl;
-  late TextEditingController _usernameCtrl;
+  late final TextEditingController _nameCtrl;
+  late final TextEditingController _usernameCtrl;
+  final _usernameFocus = FocusNode();
   String? _errorMsg;
 
   @override
@@ -31,14 +32,16 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   void dispose() {
     _nameCtrl.dispose();
     _usernameCtrl.dispose();
+    _usernameFocus.dispose();
     super.dispose();
   }
 
   void _saveProfile() {
+    FocusScope.of(context).unfocus();
     setState(() => _errorMsg = null);
     final err = ref.read(appStateProvider.notifier).updateProfile(
-          fullName: _nameCtrl.text,
-          username: _usernameCtrl.text,
+          fullName: _nameCtrl.text.trim(),
+          username: _usernameCtrl.text.trim(),
         );
     if (err != null) {
       setState(() => _errorMsg = err);
@@ -55,68 +58,140 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final initial = _nameCtrl.text.trim().isNotEmpty
+        ? _nameCtrl.text.trim()[0].toUpperCase()
+        : 'U';
+
     return Scaffold(
       appBar: AppBar(title: const Text('Edit Profil')),
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (_errorMsg != null) ...[
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: DesignTokens.errorLight.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: DesignTokens.errorLight),
-                  ),
-                  child: Text(
-                    _errorMsg!,
-                    style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: DesignTokens.errorLight,
+        child: Column(
+          children: [
+            Expanded(
+              child: SingleChildScrollView(
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Preview avatar mengikuti inisial nama
+                    Center(
+                      child: Container(
+                        width: 88,
+                        height: 88,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          gradient: DesignTokens.heroCardGradient,
+                          borderRadius: BorderRadius.circular(28),
+                        ),
+                        child: Text(
+                          initial,
+                          style: const TextStyle(
+                            fontSize: 36,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
                     ),
-                  ),
+                    const SizedBox(height: 6),
+                    const Center(
+                      child: Text(
+                        'Avatar dibuat otomatis dari inisial namamu',
+                        style: TextStyle(fontSize: 12, color: Colors.grey),
+                      ),
+                    ),
+                    const SizedBox(height: 22),
+                    if (_errorMsg != null) ...[
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color:
+                              DesignTokens.errorLight.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: DesignTokens.errorLight),
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Icon(
+                              Icons.error_outline_rounded,
+                              size: 18,
+                              color: DesignTokens.errorLight,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                _errorMsg!,
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: DesignTokens.errorLight,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+                    const Text(
+                      'Nama Lengkap',
+                      style:
+                          TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 6),
+                    TextField(
+                      controller: _nameCtrl,
+                      maxLength: 50,
+                      textInputAction: TextInputAction.next,
+                      textCapitalization: TextCapitalization.words,
+                      onChanged: (_) => setState(() {}),
+                      onSubmitted: (_) => _usernameFocus.requestFocus(),
+                      decoration: const InputDecoration(
+                        hintText: 'Nama lengkapmu',
+                        helperText: '2–50 karakter',
+                        prefixIcon: Icon(Icons.person_outline_rounded),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Username Unik',
+                      style:
+                          TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 6),
+                    TextField(
+                      controller: _usernameCtrl,
+                      focusNode: _usernameFocus,
+                      maxLength: 20,
+                      autocorrect: false,
+                      enableSuggestions: false,
+                      textInputAction: TextInputAction.done,
+                      onSubmitted: (_) => _saveProfile(),
+                      decoration: const InputDecoration(
+                        hintText: 'username_kamu',
+                        helperText: '3–20 karakter: huruf, angka, atau _',
+                        prefixIcon: Icon(Icons.alternate_email_rounded),
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 16),
-              ],
-              const Text(
-                'Nama Lengkap (2–50 karakter)',
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
               ),
-              const SizedBox(height: 6),
-              TextField(
-                controller: _nameCtrl,
-                decoration: const InputDecoration(
-                  prefixIcon: Icon(Icons.person_outline_rounded),
-                ),
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                'Username Unik (3–20 karakter, huruf/angka/_)',
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 6),
-              TextField(
-                controller: _usernameCtrl,
-                decoration: const InputDecoration(
-                  prefixIcon: Icon(Icons.alternate_email_rounded),
-                ),
-              ),
-              const Spacer(),
-              PrimaryActionButton(
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+              child: PrimaryActionButton(
                 label: 'Simpan Perubahan',
                 icon: Icons.check_rounded,
                 onPressed: _saveProfile,
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
   }
 }
-

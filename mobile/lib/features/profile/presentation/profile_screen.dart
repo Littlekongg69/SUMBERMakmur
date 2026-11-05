@@ -8,85 +8,14 @@ import '../../../shared/models/app_state_provider.dart';
 import '../../../shared/widgets/sqlquest_widgets.dart';
 
 /// Bagian 14 (Layar Profil) & Bagian 26:
-/// - Avatar default ilustrasi/inisial, nama, @username (tanpa titik online, tanpa badge Pro, tanpa Liga Ruby, tanpa Sertifikat sesuai Bagian 18 #4, #5, #6)
-/// - Chip streak "{n} Hari" + progress level & teks "{x} XP lagi ke Level {n+1}"
-/// - Grid statistik: Modul Selesai, Misi Selesai, Akurasi Rata-rata, Challenge Selesai
+/// - Avatar inisial, nama, @username (tanpa titik online, badge Pro, Liga Ruby, Sertifikat — Bagian 18 #4, #5, #6)
+/// - Chip streak + level & teks "{x} XP lagi ke Level {n+1}"
+/// - Grid statistik: Modul Selesai, Misi Selesai, Akurasi Rata-rata, Streak Terpanjang
 /// - Pencapaian & Badge carousel horizontal + "Lihat Semua"
-/// - Menu: Peringkat (Leaderboard), Pengingat Harian & Notifikasi, Akun & Keamanan, Pusat Bantuan, Keluar dari Akun, versi aplikasi
+/// - Menu: Peringkat, Edit Profil, Pengingat, Akun & Keamanan, Bantuan, Keluar
 /// - Aksi header: Bagikan profil & Pengaturan
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
-
-  void _showShareProfileSheet(BuildContext context, UserProfileModel user, int badgesCount) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Kartu Profil Publik'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            AppCard(
-              gradient: DesignTokens.heroCardGradient,
-              child: Column(
-                children: [
-                  CircleAvatar(
-                    radius: 28,
-                    backgroundColor: Colors.white.withValues(alpha: 0.2),
-                    child: Text(
-                      user.fullName.isNotEmpty
-                          ? user.fullName[0].toUpperCase()
-                          : 'U',
-                      style: const TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w800,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    user.fullName,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                      color: Colors.white,
-                    ),
-                  ),
-                  Text(
-                    '@${user.username}',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: Colors.white.withValues(alpha: 0.85),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 8,
-                    children: [
-                      StatusPill(
-                        label: 'Lv.${user.level} ${user.levelTitle}',
-                        color: Colors.white,
-                      ),
-                      StatusPill(
-                        label: '$badgesCount Badge',
-                        color: Colors.amber,
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Tutup'),
-          ),
-        ],
-      ),
-    );
-  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -94,6 +23,13 @@ class ProfileScreen extends ConsumerWidget {
     final user = state.user;
     final strings = state.strings;
     final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    // Badge terbuka ditampilkan lebih dulu agar carousel terasa "hidup".
+    // Dipisah per kelompok (bukan sort) agar urutan asli tetap terjaga.
+    final sortedBadges = [
+      ...state.achievements.where((a) => a.isUnlocked),
+      ...state.achievements.where((a) => !a.isUnlocked),
+    ];
 
     return Scaffold(
       body: Container(
@@ -110,117 +46,33 @@ class ProfileScreen extends ConsumerWidget {
                 .read(appStateProvider.notifier)
                 .setSimulatedState(ScreenSimulatedState.normal),
             child: ListView(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
               children: [
-                // Aksi Header: Judul Profil + Bagikan Profil + Pengaturan
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        strings.profileTab,
-                        style: const TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ),
-                    IconButton(
-                      tooltip: 'Bagikan Profil',
-                      onPressed: () => _showShareProfileSheet(
-                        context,
-                        user,
-                        state.unlockedBadgesCount,
-                      ),
-                      icon: const Icon(Icons.share_outlined),
-                    ),
-                    IconButton(
-                      tooltip: 'Pengaturan',
-                      onPressed: () => context.push('/settings'),
-                      icon: const Icon(Icons.settings_outlined),
-                    ),
-                  ],
+                _HeaderBar(
+                  title: strings.profileTab,
+                  onShare: () => _showShareProfileDialog(
+                    context,
+                    user,
+                    state.unlockedBadgesCount,
+                  ),
+                  onSettings: () => context.push('/settings'),
                 ),
                 const SizedBox(height: 12),
 
-                // Kartu Identitas, Chip Streak & Level
-                AppCard(
-                  child: Column(
-                    children: [
-                      Row(
-                        children: [
-                          Container(
-                            width: 64,
-                            height: 64,
-                            decoration: BoxDecoration(
-                              gradient: DesignTokens.heroCardGradient,
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            alignment: Alignment.center,
-                            child: Text(
-                              user.fullName.isNotEmpty
-                                  ? user.fullName[0].toUpperCase()
-                                  : 'U',
-                              style: const TextStyle(
-                                fontSize: 26,
-                                fontWeight: FontWeight.w800,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 14),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  user.fullName,
-                                  style: const TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  '@${user.username} · ${user.email}',
-                                  style: const TextStyle(
-                                    fontSize: 12.5,
-                                    color: Colors.grey,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                Wrap(
-                                  spacing: 8,
-                                  runSpacing: 6,
-                                  children: [
-                                    StreakChip(streakDays: user.currentStreak),
-                                    StatusPill(
-                                      label:
-                                          'Lv.${user.level} · ${user.levelTitle}',
-                                      color: DesignTokens.primaryLight,
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      XpProgressBar(
-                        progress: user.levelProgress,
-                        leftLabel: '${user.totalXp} XP Saat Ini',
-                        rightLabel: strings.xpToNextLevel(
-                          user.xpRemainingToNextLevel,
-                          user.level + 1,
-                        ),
-                        color: DesignTokens.primaryLight,
-                      ),
-                    ],
+                // Kartu identitas + level
+                _IdentityCard(
+                  user: user,
+                  xpToNextLabel: strings.xpToNextLevel(
+                    user.xpRemainingToNextLevel,
+                    user.level + 1,
                   ),
+                  onEdit: () => context.push('/profile/edit'),
                 ),
                 const SizedBox(height: 14),
 
-                // Grid Statistik (Modul Selesai, Misi Selesai, Akurasi Rata-rata, Challenge Selesai — Sertifikat disembunyikan di MVP)
+                // Statistik
+                const _SectionTitle('Statistik Belajar'),
+                const SizedBox(height: 8),
                 Row(
                   children: [
                     Expanded(
@@ -256,7 +108,7 @@ class ProfileScreen extends ConsumerWidget {
                     const SizedBox(width: 10),
                     Expanded(
                       child: StatTile(
-                        label: 'Longest Streak',
+                        label: 'Streak Terpanjang',
                         value: '${user.longestStreak} Hari',
                         icon: Icons.local_fire_department_rounded,
                         accentColor: const Color(0xFFEA580C),
@@ -264,17 +116,14 @@ class ProfileScreen extends ConsumerWidget {
                     ),
                   ],
                 ),
-                const SizedBox(height: 18),
+                const SizedBox(height: 20),
 
-                // Pencapaian & Badge (Carousel Horizontal + "Lihat Semua")
+                // Pencapaian
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      'Pencapaian & Badge (${state.unlockedBadgesCount} didapat)',
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w800,
+                    Expanded(
+                      child: _SectionTitle(
+                        'Pencapaian & Badge · ${state.unlockedBadgesCount}/${state.achievements.length}',
                       ),
                     ),
                     TextButton(
@@ -283,24 +132,39 @@ class ProfileScreen extends ConsumerWidget {
                     ),
                   ],
                 ),
-                const SizedBox(height: 6),
-                SizedBox(
-                  height: 148,
-                  child: ListView.separated(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: state.achievements.length,
-                    separatorBuilder: (_, _) => const SizedBox(width: 10),
-                    itemBuilder: (context, idx) {
-                      return BadgeTile(
-                        achievement: state.achievements[idx],
+                const SizedBox(height: 4),
+                if (sortedBadges.isEmpty)
+                  const AppCard(
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(vertical: 8),
+                      child: Center(
+                        child: Text(
+                          'Belum ada badge. Selesaikan lesson pertamamu!',
+                          style: TextStyle(fontSize: 13, color: Colors.grey),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ),
+                  )
+                else
+                  SizedBox(
+                    height: 148,
+                    child: ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      physics: const BouncingScrollPhysics(),
+                      itemCount: sortedBadges.length,
+                      separatorBuilder: (_, _) => const SizedBox(width: 10),
+                      itemBuilder: (context, idx) => BadgeTile(
+                        achievement: sortedBadges[idx],
                         onTap: () => context.push('/achievements'),
-                      );
-                    },
+                      ),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 18),
+                const SizedBox(height: 20),
 
-                // Menu Daftar Pengaturan & Navigasi
+                // Menu: Aktivitas
+                const _SectionTitle('Aktivitas'),
+                const SizedBox(height: 8),
                 AppCard(
                   padding: const EdgeInsets.symmetric(vertical: 6),
                   child: Column(
@@ -314,25 +178,36 @@ class ProfileScreen extends ConsumerWidget {
                       ),
                       const Divider(height: 1),
                       SettingsListTile(
-                        icon: Icons.edit_outlined,
-                        title: 'Edit Profil',
-                        subtitle: 'Ubah nama lengkap, @username, dan avatar',
-                        onTap: () => context.push('/profile/edit'),
-                      ),
-                      const Divider(height: 1),
-                      SettingsListTile(
                         icon: Icons.notifications_active_outlined,
                         title: 'Pengingat Harian & Notifikasi',
                         subtitle:
                             'Pengingat pukul ${user.reminderTime} (${user.timezone})',
                         onTap: () => context.push('/notifications'),
                       ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // Menu: Akun
+                const _SectionTitle('Akun'),
+                const SizedBox(height: 8),
+                AppCard(
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  child: Column(
+                    children: [
+                      SettingsListTile(
+                        icon: Icons.edit_outlined,
+                        title: 'Edit Profil',
+                        subtitle: 'Ubah nama lengkap dan @username',
+                        onTap: () => context.push('/profile/edit'),
+                      ),
                       const Divider(height: 1),
                       SettingsListTile(
                         icon: Icons.security_rounded,
-                        title: 'Akun, Tema, Bahasa & Keamanan',
+                        title: 'Tema, Bahasa & Keamanan',
                         subtitle:
-                            'Ganti password, tema (${user.themeMode}), bahasa (${user.language.toUpperCase()}), privasi, hapus akun',
+                            'Tema ${_themeLabel(user.themeMode)} · ${user.language.toUpperCase()} · privasi & hapus akun',
                         onTap: () => context.push('/settings'),
                       ),
                       const Divider(height: 1),
@@ -340,25 +215,7 @@ class ProfileScreen extends ConsumerWidget {
                         icon: Icons.help_outline_rounded,
                         title: 'Pusat Bantuan & FAQ SQL Sandbox',
                         subtitle: 'Panduan dialek PostgreSQL 15+ & aturan XP',
-                        onTap: () {
-                          showDialog(
-                            context: context,
-                            builder: (ctx) => AlertDialog(
-                              title: const Text('Pusat Bantuan SQLQuest'),
-                              content: const Text(
-                                '• Seluruh query dijalankan di sandbox PostgreSQL terisolasi (timeout 3 detik, maks 500 baris).\n'
-                                '• Formula Level: XP_kumulatif(L) = 50 × L × (L - 1).\n'
-                                '• Streak bertambah 1 kali per hari lokal saat ada learning activity valid.',
-                              ),
-                              actions: [
-                                TextButton(
-                                  onPressed: () => Navigator.pop(ctx),
-                                  child: const Text('Tutup'),
-                                ),
-                              ],
-                            ),
-                          );
-                        },
+                        onTap: () => _showHelpDialog(context),
                       ),
                       const Divider(height: 1),
                       SettingsListTile(
@@ -366,15 +223,12 @@ class ProfileScreen extends ConsumerWidget {
                         iconColor: DesignTokens.errorLight,
                         title: 'Keluar dari Akun',
                         subtitle: 'Mencabut refresh token perangkat ini',
-                        onTap: () async {
-                          await ref.read(appStateProvider.notifier).logout();
-                          if (context.mounted) context.go('/login');
-                        },
+                        onTap: () => _confirmLogout(context, ref),
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 18),
                 Center(
                   child: Text(
                     '${AppConstants.appName} v${AppConstants.appVersion} · PostgreSQL 15 Sandbox',
@@ -386,6 +240,319 @@ class ProfileScreen extends ConsumerWidget {
           ),
         ),
       ),
+    );
+  }
+
+  static String _themeLabel(String mode) {
+    switch (mode) {
+      case 'light':
+        return 'Light';
+      case 'dark':
+        return 'Dark';
+      default:
+        return 'Sistem';
+    }
+  }
+
+  Future<void> _confirmLogout(BuildContext context, WidgetRef ref) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Keluar dari akun?'),
+        content: const Text(
+          'Sesi di perangkat ini akan dicabut. Kamu perlu login lagi untuk melanjutkan belajar.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Batal'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: DesignTokens.errorLight,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Keluar'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    await ref.read(appStateProvider.notifier).logout();
+    if (context.mounted) context.go('/login');
+  }
+
+  void _showHelpDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Pusat Bantuan SQLQuest'),
+        content: const Text(
+          '• Seluruh query dijalankan di sandbox PostgreSQL terisolasi (timeout 3 detik, maks 500 baris).\n\n'
+          '• Formula Level: XP_kumulatif(L) = 50 × L × (L - 1).\n\n'
+          '• Streak bertambah 1 kali per hari lokal saat ada learning activity valid.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Tutup'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showShareProfileDialog(
+    BuildContext context,
+    UserProfileModel user,
+    int badgesCount,
+  ) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        contentPadding: const EdgeInsets.fromLTRB(16, 20, 16, 0),
+        title: const Text('Kartu Profil Publik'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: AppCard(
+            gradient: DesignTokens.heroCardGradient,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _InitialAvatar(
+                  name: user.fullName,
+                  size: 64,
+                  radius: 32,
+                  onGradient: true,
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  user.fullName,
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.white,
+                  ),
+                ),
+                Text(
+                  '@${user.username}',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Colors.white.withValues(alpha: 0.85),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  alignment: WrapAlignment.center,
+                  spacing: 8,
+                  runSpacing: 6,
+                  children: [
+                    StatusPill(
+                      label: 'Lv.${user.level} ${user.levelTitle}',
+                      color: Colors.white,
+                    ),
+                    StatusPill(
+                      label: '$badgesCount Badge',
+                      color: Colors.amber,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Tutup'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HeaderBar extends StatelessWidget {
+  final String title;
+  final VoidCallback onShare;
+  final VoidCallback onSettings;
+
+  const _HeaderBar({
+    required this.title,
+    required this.onShare,
+    required this.onSettings,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            title,
+            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
+          ),
+        ),
+        IconButton(
+          tooltip: 'Bagikan Profil',
+          onPressed: onShare,
+          icon: const Icon(Icons.share_outlined),
+        ),
+        IconButton(
+          tooltip: 'Pengaturan',
+          onPressed: onSettings,
+          icon: const Icon(Icons.settings_outlined),
+        ),
+      ],
+    );
+  }
+}
+
+class _IdentityCard extends StatelessWidget {
+  final UserProfileModel user;
+  final String xpToNextLabel;
+  final VoidCallback onEdit;
+
+  const _IdentityCard({
+    required this.user,
+    required this.xpToNextLabel,
+    required this.onEdit,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return AppCard(
+      child: Column(
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _InitialAvatar(name: user.fullName, size: 68, radius: 22),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      user.fullName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 19,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '@${user.username}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w600,
+                        color: Theme.of(context).brightness == Brightness.dark
+                            ? DesignTokens.primaryDark
+                            : DesignTokens.primaryLight,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      user.email,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 12, color: Colors.grey),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                tooltip: 'Edit Profil',
+                visualDensity: VisualDensity.compact,
+                onPressed: onEdit,
+                icon: const Icon(Icons.edit_outlined, size: 20),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              children: [
+                StreakChip(streakDays: user.currentStreak),
+                StatusPill(
+                  label: 'Lv.${user.level} · ${user.levelTitle}',
+                  color: DesignTokens.primaryLight,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          XpProgressBar(
+            progress: user.levelProgress,
+            leftLabel: '${user.totalXp} XP Saat Ini',
+            rightLabel: xpToNextLabel,
+            color: DesignTokens.primaryLight,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _InitialAvatar extends StatelessWidget {
+  final String name;
+  final double size;
+  final double radius;
+  final bool onGradient;
+
+  const _InitialAvatar({
+    required this.name,
+    required this.size,
+    required this.radius,
+    this.onGradient = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final initial = name.trim().isNotEmpty ? name.trim()[0].toUpperCase() : 'U';
+    return Container(
+      width: size,
+      height: size,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        gradient: onGradient ? null : DesignTokens.heroCardGradient,
+        color: onGradient ? Colors.white.withValues(alpha: 0.2) : null,
+        borderRadius: BorderRadius.circular(radius),
+      ),
+      child: Text(
+        initial,
+        style: TextStyle(
+          fontSize: size * 0.4,
+          fontWeight: FontWeight.w800,
+          color: Colors.white,
+        ),
+      ),
+    );
+  }
+}
+
+class _SectionTitle extends StatelessWidget {
+  final String text;
+  const _SectionTitle(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
     );
   }
 }

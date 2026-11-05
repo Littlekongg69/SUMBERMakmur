@@ -24,116 +24,51 @@ class SettingsScreen extends ConsumerStatefulWidget {
 }
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
-  void _showChangePasswordDialog() {
-    final oldCtrl = TextEditingController();
-    final newCtrl = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Ganti Password'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: oldCtrl,
-              obscureText: true,
-              decoration: const InputDecoration(labelText: 'Password Lama'),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: newCtrl,
-              obscureText: true,
-              decoration: const InputDecoration(
-                labelText: 'Password Baru (min. 8 karakter)',
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Batal'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              if (newCtrl.text.length < 8) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Password baru minimal 8 karakter.'),
-                  ),
-                );
-                return;
-              }
-              Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  backgroundColor: DesignTokens.successLight,
-                  content: Text('Password berhasil diperbarui!'),
-                ),
-              );
-            },
-            child: const Text('Simpan'),
-          ),
-        ],
-      ),
+  Future<void> _pickReminderTime() async {
+    final user = ref.read(appStateProvider).user;
+    final parts = user.reminderTime.split(':');
+    final initial = TimeOfDay(
+      hour: int.tryParse(parts.first) ?? 19,
+      minute: parts.length > 1 ? (int.tryParse(parts[1]) ?? 0) : 0,
     );
+
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: initial,
+      helpText: 'Pilih jam pengingat belajar',
+    );
+    if (picked == null || !mounted) return;
+
+    final hh = picked.hour.toString().padLeft(2, '0');
+    final mm = picked.minute.toString().padLeft(2, '0');
+    ref
+        .read(appStateProvider.notifier)
+        .updatePreferences(reminderTime: '$hh:$mm');
   }
 
-  void _showDeleteAccountDialog() {
-    final passCtrl = TextEditingController();
-    showDialog(
+  Future<void> _showChangePasswordDialog() async {
+    final success = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Hapus Akun Permanen (AC-14)'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Akun akan langsung dinonaktifkan, seluruh sesi perangkat dicabut, dikeluarkan dari leaderboard, dan data pribadi dianonimkan dalam 30 hari.',
-              style: TextStyle(fontSize: 13),
-            ),
-            const SizedBox(height: 14),
-            TextField(
-              controller: passCtrl,
-              obscureText: true,
-              decoration: const InputDecoration(
-                labelText: 'Masukkan Password untuk Konfirmasi',
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Batal'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: DesignTokens.errorLight,
-            ),
-            onPressed: () async {
-              final ok = await ref
-                  .read(appStateProvider.notifier)
-                  .deleteAccount(passCtrl.text);
-              if (!mounted) return;
-              if (!ok) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Konfirmasi password wajib diisi.'),
-                  ),
-                );
-                return;
-              }
-              if (ctx.mounted) Navigator.pop(ctx);
-              context.go('/login');
-            },
-            child: const Text('Hapus Akun Saya'),
-          ),
-        ],
-      ),
+      builder: (_) => const _ChangePasswordDialog(),
     );
+    if (success == true && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: DesignTokens.successLight,
+          content: Text('Password berhasil diperbarui!'),
+        ),
+      );
+    }
+  }
+
+  Future<void> _showDeleteAccountDialog() async {
+    // GoRouter diambil sebelum dialog dibuka agar aman dipakai setelah async.
+    final router = GoRouter.of(context);
+    final deleted = await showDialog<bool>(
+      context: context,
+      builder: (_) => const _DeleteAccountDialog(),
+    );
+    if (deleted == true) router.go('/login');
   }
 
   @override
@@ -144,94 +79,70 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Pengaturan & Keamanan')),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
         children: [
-          const Text(
-            'Tampilan & Bahasa (MOB-09)',
-            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
-          ),
+          // ── Tampilan & Bahasa ──
+          const _SectionTitle('Tampilan & Bahasa'),
           const SizedBox(height: 8),
           AppCard(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Tema Aplikasi',
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-                ),
+                const _FieldLabel('Tema Aplikasi'),
                 const SizedBox(height: 8),
-                Row(
-                  children: ['light', 'dark', 'system'].map((mode) {
-                    final selected = user.themeMode == mode;
-                    final label = mode == 'light'
-                        ? 'Light'
-                        : mode == 'dark'
-                            ? 'Dark'
-                            : 'Sistem';
-                    return Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 4),
-                        child: ChoiceChip(
-                          selected: selected,
-                          label: Center(child: Text(label)),
-                          onSelected: (_) => ref
-                              .read(appStateProvider.notifier)
-                              .updatePreferences(themeMode: mode),
-                        ),
-                      ),
-                    );
-                  }).toList(),
+                SizedBox(
+                  width: double.infinity,
+                  child: SegmentedButton<String>(
+                    showSelectedIcon: false,
+                    segments: const [
+                      ButtonSegment(value: 'light', label: Text('Light')),
+                      ButtonSegment(value: 'dark', label: Text('Dark')),
+                      ButtonSegment(value: 'system', label: Text('Sistem')),
+                    ],
+                    selected: {user.themeMode},
+                    onSelectionChanged: (sel) => ref
+                        .read(appStateProvider.notifier)
+                        .updatePreferences(themeMode: sel.first),
+                  ),
                 ),
-                const SizedBox(height: 14),
-                const Text(
-                  'Bahasa Antarmuka',
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-                ),
+                const SizedBox(height: 16),
+                const _FieldLabel('Bahasa Antarmuka'),
                 const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Expanded(
-                      child: ChoiceChip(
-                        selected: user.language == 'id',
-                        label: const Center(child: Text('Bahasa Indonesia')),
-                        onSelected: (_) => ref
-                            .read(appStateProvider.notifier)
-                            .updatePreferences(language: 'id'),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: ChoiceChip(
-                        selected: user.language == 'en',
-                        label: const Center(child: Text('English')),
-                        onSelected: (_) => ref
-                            .read(appStateProvider.notifier)
-                            .updatePreferences(language: 'en'),
-                      ),
-                    ),
-                  ],
+                SizedBox(
+                  width: double.infinity,
+                  child: SegmentedButton<String>(
+                    showSelectedIcon: false,
+                    segments: const [
+                      ButtonSegment(value: 'id', label: Text('Indonesia')),
+                      ButtonSegment(value: 'en', label: Text('English')),
+                    ],
+                    selected: {user.language},
+                    onSelectionChanged: (sel) => ref
+                        .read(appStateProvider.notifier)
+                        .updatePreferences(language: sel.first),
+                  ),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: 20),
 
-          const Text(
-            'Privasi & Pengingat',
-            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
-          ),
+          // ── Privasi & Pengingat ──
+          const _SectionTitle('Privasi & Pengingat'),
           const SizedBox(height: 8),
           AppCard(
             padding: const EdgeInsets.symmetric(vertical: 6),
             child: Column(
               children: [
                 SwitchListTile(
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
                   title: const Text(
                     'Sembunyikan dari Leaderboard Publik',
                     style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
                   ),
                   subtitle: const Text(
-                    'Kamu tetap bisa melihat posisi sendiri di Leaderboard (Bagian 26)',
+                    'Kamu tetap bisa melihat posisimu sendiri di Leaderboard',
                     style: TextStyle(fontSize: 12),
                   ),
                   value: user.hideFromLeaderboard,
@@ -245,13 +156,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   title: 'Jam Pengingat Belajar Harian',
                   subtitle:
                       'Pukul ${user.reminderTime} (${user.timezone}) · Target ${user.dailyGoalMinutes} menit',
-                  onTap: () {
-                    final nextTime =
-                        user.reminderTime == '19:00' ? '20:00' : '19:00';
-                    ref
-                        .read(appStateProvider.notifier)
-                        .updatePreferences(reminderTime: nextTime);
-                  },
+                  onTap: _pickReminderTime,
                 ),
                 const Divider(height: 1),
                 SettingsListTile(
@@ -263,20 +168,31 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ],
             ),
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: 20),
 
-          // Simulasi State Layar untuk Pengujian MOB-02 & AC-19
-          const Text(
-            'Uji State Layar (MOB-02 & AC-19 Demo)',
-            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
+          // ── Keamanan ──
+          const _SectionTitle('Keamanan'),
+          const SizedBox(height: 8),
+          AppCard(
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: SettingsListTile(
+              icon: Icons.password_rounded,
+              title: 'Ganti Password',
+              subtitle: 'Wajib memasukkan password lama',
+              onTap: _showChangePasswordDialog,
+            ),
           ),
+          const SizedBox(height: 20),
+
+          // ── Simulasi State Layar (MOB-02 & AC-19) ──
+          const _SectionTitle('Uji State Layar (Demo)'),
           const SizedBox(height: 8),
           AppCard(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'Ubah state untuk menguji tampilan Loading Skeleton, Empty, Error (500), dan Offline Cache:',
+                  'Ubah state untuk menguji tampilan Loading Skeleton, Empty, Error (500), dan Offline Cache.',
                   style: TextStyle(fontSize: 12.5, color: Colors.grey),
                 ),
                 const SizedBox(height: 10),
@@ -296,33 +212,21 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ],
             ),
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: 20),
 
-          const Text(
-            'Keamanan & Zona Bahaya',
-            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
-          ),
+          // ── Zona Bahaya (AC-14) ──
+          const _SectionTitle('Zona Bahaya', color: DesignTokens.errorLight),
           const SizedBox(height: 8),
           AppCard(
+            borderColor: DesignTokens.errorLight.withValues(alpha: 0.5),
             padding: const EdgeInsets.symmetric(vertical: 6),
-            child: Column(
-              children: [
-                SettingsListTile(
-                  icon: Icons.password_rounded,
-                  title: 'Ganti Password',
-                  subtitle: 'Wajib memasukkan password lama',
-                  onTap: _showChangePasswordDialog,
-                ),
-                const Divider(height: 1),
-                SettingsListTile(
-                  icon: Icons.delete_forever_rounded,
-                  iconColor: DesignTokens.errorLight,
-                  title: 'Hapus Akun (Delete Account)',
-                  subtitle:
-                      'Nonaktifkan akun & anonimkan data dalam 30 hari (AC-14)',
-                  onTap: _showDeleteAccountDialog,
-                ),
-              ],
+            child: SettingsListTile(
+              icon: Icons.delete_forever_rounded,
+              iconColor: DesignTokens.errorLight,
+              title: 'Hapus Akun',
+              subtitle:
+                  'Nonaktifkan akun & anonimkan data pribadi dalam 30 hari',
+              onTap: _showDeleteAccountDialog,
             ),
           ),
         ],
@@ -331,3 +235,302 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 }
 
+class _SectionTitle extends StatelessWidget {
+  final String text;
+  final Color? color;
+  const _SectionTitle(this.text, {this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text,
+      style: TextStyle(
+        fontSize: 15,
+        fontWeight: FontWeight.w800,
+        color: color,
+      ),
+    );
+  }
+}
+
+class _FieldLabel extends StatelessWidget {
+  final String text;
+  const _FieldLabel(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text,
+      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+    );
+  }
+}
+
+/// Dialog ganti password dengan validasi lengkap & toggle lihat password.
+class _ChangePasswordDialog extends StatefulWidget {
+  const _ChangePasswordDialog();
+
+  @override
+  State<_ChangePasswordDialog> createState() => _ChangePasswordDialogState();
+}
+
+class _ChangePasswordDialogState extends State<_ChangePasswordDialog> {
+  final _oldCtrl = TextEditingController();
+  final _newCtrl = TextEditingController();
+  final _confirmCtrl = TextEditingController();
+  bool _showOld = false;
+  bool _showNew = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _oldCtrl.dispose();
+    _newCtrl.dispose();
+    _confirmCtrl.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    String? err;
+    if (_oldCtrl.text.isEmpty) {
+      err = 'Password lama wajib diisi.';
+    } else if (_newCtrl.text.length < 8) {
+      err = 'Password baru minimal 8 karakter.';
+    } else if (_newCtrl.text == _oldCtrl.text) {
+      err = 'Password baru harus berbeda dari password lama.';
+    } else if (_confirmCtrl.text != _newCtrl.text) {
+      err = 'Konfirmasi password baru tidak cocok.';
+    }
+
+    if (err != null) {
+      setState(() => _error = err);
+      return;
+    }
+    Navigator.pop(context, true);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Ganti Password'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (_error != null) ...[
+              _DialogError(message: _error!),
+              const SizedBox(height: 12),
+            ],
+            TextField(
+              controller: _oldCtrl,
+              obscureText: !_showOld,
+              textInputAction: TextInputAction.next,
+              decoration: InputDecoration(
+                labelText: 'Password Lama',
+                suffixIcon: IconButton(
+                  tooltip: _showOld ? 'Sembunyikan' : 'Tampilkan',
+                  icon: Icon(
+                    _showOld
+                        ? Icons.visibility_off_outlined
+                        : Icons.visibility_outlined,
+                  ),
+                  onPressed: () => setState(() => _showOld = !_showOld),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _newCtrl,
+              obscureText: !_showNew,
+              textInputAction: TextInputAction.next,
+              decoration: InputDecoration(
+                labelText: 'Password Baru (min. 8 karakter)',
+                suffixIcon: IconButton(
+                  tooltip: _showNew ? 'Sembunyikan' : 'Tampilkan',
+                  icon: Icon(
+                    _showNew
+                        ? Icons.visibility_off_outlined
+                        : Icons.visibility_outlined,
+                  ),
+                  onPressed: () => setState(() => _showNew = !_showNew),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _confirmCtrl,
+              obscureText: !_showNew,
+              textInputAction: TextInputAction.done,
+              onSubmitted: (_) => _submit(),
+              decoration: const InputDecoration(
+                labelText: 'Ulangi Password Baru',
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('Batal'),
+        ),
+        ElevatedButton(
+          onPressed: _submit,
+          child: const Text('Simpan'),
+        ),
+      ],
+    );
+  }
+}
+
+/// Dialog hapus akun (AC-14): wajib konfirmasi password, ada state loading.
+class _DeleteAccountDialog extends ConsumerStatefulWidget {
+  const _DeleteAccountDialog();
+
+  @override
+  ConsumerState<_DeleteAccountDialog> createState() =>
+      _DeleteAccountDialogState();
+}
+
+class _DeleteAccountDialogState extends ConsumerState<_DeleteAccountDialog> {
+  final _passCtrl = TextEditingController();
+  bool _show = false;
+  bool _loading = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _passCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (_passCtrl.text.isEmpty) {
+      setState(() => _error = 'Konfirmasi password wajib diisi.');
+      return;
+    }
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+
+    final ok = await ref
+        .read(appStateProvider.notifier)
+        .deleteAccount(_passCtrl.text);
+    if (!mounted) return;
+
+    if (!ok) {
+      setState(() {
+        _loading = false;
+        _error = 'Konfirmasi password wajib diisi.';
+      });
+      return;
+    }
+    Navigator.pop(context, true);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Hapus Akun Permanen?'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Akun akan langsung dinonaktifkan, seluruh sesi perangkat dicabut, dikeluarkan dari leaderboard, dan data pribadi dianonimkan dalam 30 hari.',
+              style: TextStyle(fontSize: 13),
+            ),
+            const SizedBox(height: 14),
+            if (_error != null) ...[
+              _DialogError(message: _error!),
+              const SizedBox(height: 12),
+            ],
+            TextField(
+              controller: _passCtrl,
+              obscureText: !_show,
+              enabled: !_loading,
+              textInputAction: TextInputAction.done,
+              onSubmitted: (_) => _submit(),
+              decoration: InputDecoration(
+                labelText: 'Masukkan Password untuk Konfirmasi',
+                suffixIcon: IconButton(
+                  tooltip: _show ? 'Sembunyikan' : 'Tampilkan',
+                  icon: Icon(
+                    _show
+                        ? Icons.visibility_off_outlined
+                        : Icons.visibility_outlined,
+                  ),
+                  onPressed: () => setState(() => _show = !_show),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _loading ? null : () => Navigator.pop(context, false),
+          child: const Text('Batal'),
+        ),
+        ElevatedButton(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: DesignTokens.errorLight,
+            foregroundColor: Colors.white,
+          ),
+          onPressed: _loading ? null : _submit,
+          child: _loading
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
+                )
+              : const Text('Hapus Akun Saya'),
+        ),
+      ],
+    );
+  }
+}
+
+class _DialogError extends StatelessWidget {
+  final String message;
+  const _DialogError({required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: DesignTokens.errorLight.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(DesignTokens.smallRadius),
+        border: Border.all(color: DesignTokens.errorLight),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(
+            Icons.error_outline_rounded,
+            size: 16,
+            color: DesignTokens.errorLight,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              message,
+              style: const TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w600,
+                color: DesignTokens.errorLight,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
